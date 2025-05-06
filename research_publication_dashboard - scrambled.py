@@ -11,7 +11,7 @@ st.set_page_config(page_title="Research Publications Dashboard (Demo)", layout="
 # Demo Disclaimer
 st.markdown("""
     <div style='background-color: #FFF3CD; padding: 10px; border-radius: 5px; margin-bottom: 20px;'>
-        <strong>Demo Notice:</strong> This is a demonstration of a research publications dashboard designed to process uploaded Excel files from METU. For this demo, the data is randomly generated and does not represent real information. This dashboard was used internally to identify and visualize relevant trends.
+        <strong>Demo Notice:</strong> This is a demonstration of a research publications dashboard designed to process uploaded files from METU. For this demo, the data is randomly generated and does not represent real information. This dashboard was used internally to identify and visualize relevant trends.
     </div>
 """, unsafe_allow_html=True)
 
