@@ -232,7 +232,7 @@ COLUMNS = [
 # Title order
 title_order = ["Res. Asst.", "Lecturer", "Asst. Prof.", "Assoc. Prof.", "Prof.", "Other"]
 
-# Publication types definition
+# Publication types definition with fixed order
 pub_types = ['ESCI Articles', 'Scopus Articles', 'Q1 Articles', 'Q2 Articles', 'Q3 Articles', 'Q4 Articles', 'Non-Quartile Articles']
 pub_type_labels = {
     'ESCI Articles': 'ESCI Articles',
@@ -244,13 +244,16 @@ pub_type_labels = {
     'Non-Quartile Articles': 'Non-Quartile Articles'
 }
 
+# Quartile columns with fixed order
+quartile_cols = ['Q1 Articles', 'Q2 Articles', 'Q3 Articles', 'Q4 Articles']
+
 # Function to generate random data
 def generate_random_data(seed):
     import logging
     logging.basicConfig(level=logging.DEBUG)
     logger = logging.getLogger(__name__)
     
-    np.random.seed(seed)  # Set the provided seed for reproducibility
+    np.random.seed(seed)
     num_researchers = np.random.randint(300, 500)
     logger.debug(f"Generating data for {num_researchers} researchers")
     
@@ -258,7 +261,6 @@ def generate_random_data(seed):
     titles = ["Res. Asst.", "Lecturer", "Asst. Prof.", "Assoc. Prof.", "Prof.", "Other"]
     years = ['2023', '2024']
     
-    # Define valid departments for each faculty
     faculty_to_depts = {
         'Engineering Faculty': ['Computer Engineering', 'Environmental Engineering', 'Electrical and Electronics Engineering', 'Industrial Engineering', 'Civil Engineering', 'Geological Engineering', 'Chemical Engineering', 'Mining Engineering', 'Mechanical Engineering', 'Metallurgical and Materials Engineering', 'Petroleum and Natural Gas Engineering', 'Aerospace Engineering', 'Food Engineering'],
         'Faculty of Economics and Administrative Sciences': ['Economics', 'Political Science and Public Administration', 'International Relations'],
@@ -279,7 +281,6 @@ def generate_random_data(seed):
     
     for i in range(num_researchers):
         logger.debug(f"Generating researcher {i+1}/{num_researchers}")
-        # Use uniform random selection to avoid probability mismatches
         title = np.random.choice(titles)
         name = f"Researcher_{np.random.randint(1000, 9999)}"
         faculty = np.random.choice(faculties)
@@ -420,27 +421,21 @@ with st.container():
     st.header("Data Generation", anchor="data-generation")
     st.markdown("This demo uses randomly generated publication data for 2023 and 2024 to simulate university research output. Originally, the app included a prompt to upload an Excel file.")
     
-    # Initialize session state for data
     if 'data' not in st.session_state:
         st.session_state.data = None
         st.session_state.removed_df = None
         st.session_state.error = None
-        st.session_state.seed = np.random.randint(0, 1000000)  # Initial random seed
+        st.session_state.seed = np.random.randint(0, 1000000)
     
-    # Button to scramble data
     if st.button("Scramble Data"):
         with st.spinner("Generating new synthetic data..."):
-            st.session_state.seed = np.random.randint(0, 1000000)  # Generate new seed
+            st.session_state.seed = np.random.randint(0, 1000000)
             st.session_state.data, st.session_state.removed_df, st.session_state.error = load_and_process_data(st.session_state.seed)
     
-    # Generate data if not already done
     if st.session_state.data is None:
         with st.spinner("Generating synthetic data..."):
             st.session_state.data, st.session_state.removed_df, st.session_state.error = load_and_process_data(st.session_state.seed)
     
-    # Use the stored data
-    df, removed_df, error = st.session_state.data, st.session_state.removed_df, st.session_state.error
-    # Use the stored data
     df, removed_df, error = st.session_state.data, st.session_state.removed_df, st.session_state.error
     
     if error:
@@ -448,11 +443,9 @@ with st.container():
     else:
         st.success("Randomized data generated and faculty/department names standardized.")
         
-        # Summary Statistics
         st.header("Summary Statistics", anchor="summary-statistics")
         st.markdown("This section summarizes key statistics and trends from the synthetic 2023 and 2024 publication data.")
 
-        # Metrics
         total_pubs = df['Total Publications'].sum()
         pubs_2023 = df[df['Year'] == '2023']['Total Publications'].sum()
         pubs_2024 = df[df['Year'] == '2024']['Total Publications'].sum()
@@ -460,7 +453,6 @@ with st.container():
         active_researchers = df[df['Total Publications'] > 0]['Name'].nunique()
         high_impact_researchers = df[df['Q1 Articles'] + df['Q2 Articles'] > 0]['Name'].nunique()
         avg_impact = df['Impact Score'].mean()
-        quartile_cols = ['Q1 Articles', 'Q2 Articles', 'Q3 Articles', 'Q4 Articles']
         diversity_index = df.groupby(['Faculty', 'Year'])[quartile_cols].sum().apply(
             lambda row: -sum((c / sum(row) * np.log(c / sum(row))) for c in row if c > 0) if sum(row) > 0 else 0, axis=1
         ).mean()
@@ -478,7 +470,6 @@ with st.container():
             st.metric("Average Impact Score", f"{avg_impact:.2f}")
             st.metric("Average Quartile Diversity Index", f"{diversity_index:.2f}")
 
-        # Key Takeaways
         st.subheader("Key Insights")
         takeaways = []
         if pub_change > 10:
@@ -498,19 +489,26 @@ with st.container():
         for takeaway in takeaways:
             st.markdown(takeaway)
 
-        # Visualizations
         st.subheader("Trend Visualizations")
         with st.expander("View Trends"):
             tab1, tab2, tab3 = st.tabs(["Publication Type Changes", "Publication Type Distribution", "Most Active Faculties"])
             with tab1:
                 pub_trend = df.groupby('Year')[pub_types].sum().reset_index()
                 pub_trend_melted = pub_trend.melt(id_vars='Year', value_vars=pub_types, var_name='Publication Type', value_name='Count')
-                pub_trend_melted['Publication Type'] = pub_trend_melted['Publication Type'].map(pub_type_labels)
+                pub_trend_melted['Publication Type'] = pd.Categorical(
+                    pub_trend_melted['Publication Type'].map(pub_type_labels),
+                    categories=[pub_type_labels[pt] for pt in pub_types],
+                    ordered=True
+                )
                 change_data = pub_trend.set_index('Year')[pub_types].T
                 change_data['Change'] = change_data['2024'] - change_data['2023']
                 change_data['Change Type'] = change_data['Change'].apply(lambda x: 'increase' if x >= 0 else 'decrease')
                 change_data = change_data.reset_index().rename(columns={'index': 'Publication Type'})
-                change_data['Publication Type'] = change_data['Publication Type'].map(pub_type_labels)
+                change_data['Publication Type'] = pd.Categorical(
+                    change_data['Publication Type'].map(pub_type_labels),
+                    categories=[pub_type_labels[pt] for pt in pub_types],
+                    ordered=True
+                )
                 fig_trend = px.bar(change_data, x='Change', y='Publication Type', orientation='h',
                                    color='Change Type', title="Publication Type Changes (2023-2024)",
                                    color_discrete_map=CHANGE_COLOR_MAP)
@@ -525,7 +523,11 @@ with st.container():
             with tab2:
                 pub_dist = df[pub_types].sum().reset_index()
                 pub_dist.columns = ['Publication Type', 'Count']
-                pub_dist['Publication Type'] = pub_dist['Publication Type'].map(pub_type_labels)
+                pub_dist['Publication Type'] = pd.Categorical(
+                    pub_dist['Publication Type'].map(pub_type_labels),
+                    categories=[pub_type_labels[pt] for pt in pub_types],
+                    ordered=True
+                )
                 fig_dist = px.pie(pub_dist, names='Publication Type', values='Count',
                                   title="Distribution of All Publication Types", color_discrete_map=COLOR_MAP)
                 fig_dist.update_layout(height=500, width=900)
@@ -540,7 +542,6 @@ with st.container():
                 fig_faculty.update_layout(xaxis_tickangle=45, height=500, width=900)
                 st.plotly_chart(fig_faculty, use_container_width=True, key="top_faculties_bar_summary")
 
-        # Check for unmapped faculties or departments
         unmapped_faculties = df['Faculty'][~df['Faculty'].isin(FACULTY_MAPPING.values()) & (df['Faculty'] != 'Unknown')].unique()
         unmapped_departments = df['Department'][~df['Department'].isin(DEPARTMENT_MAPPING.values()) & (df['Department'] != 'Unknown')].unique()
         if unmapped_faculties.size > 0 or unmapped_departments.size > 0:
@@ -554,7 +555,6 @@ with st.container():
                     for dept in unmapped_departments:
                         st.write(f"- {dept}")
 
-        # Interactive Filters
         st.header("Data Filtering", anchor="data-filtering")
         st.markdown("Filter data by faculty, department, and title. Select categories to include or exclude.")
         col1, col2, col3 = st.columns(3)
@@ -568,7 +568,6 @@ with st.container():
             title_options = sorted([t for t in df['Title'].unique() if t and isinstance(t, str)], key=str.lower)
             title_filter = st.multiselect("Select Title (Include)", options=title_options, default=[])
         
-        # Exclusion Filters
         col4, col5, col6 = st.columns(3)
         with col4:
             faculty_exclude = st.multiselect("Exclude Faculty", options=faculty_options, default=[])
@@ -577,7 +576,6 @@ with st.container():
         with col6:
             title_exclude = st.multiselect("Exclude Title", options=title_options, default=[])
 
-        # Apply filters
         filtered_df = df.copy()
         if faculty_filter:
             filtered_df = filtered_df[filtered_df['Faculty'].map(lambda x: list(FACULTY_MAPPING.keys())[list(FACULTY_MAPPING.values()).index(x)] if x in FACULTY_MAPPING.values() else x).isin(faculty_filter)]
@@ -592,74 +590,80 @@ with st.container():
         if title_exclude:
             filtered_df = filtered_df[~filtered_df['Title'].isin(title_exclude)]
 
-        # Visualizations
         st.subheader("Data Visualizations")
 
-        # Year-wise Publication Type Distribution
         st.header("Publication Type Distribution by Year", anchor="yearly-pub-distribution")
         st.markdown("Distribution of publication types for 2023 and 2024.")
         pub_data = filtered_df.groupby('Year')[pub_types].sum().reset_index()
         pub_data_melted = pub_data.melt(id_vars='Year', value_vars=pub_types, var_name='Publication Type', value_name='Count')
-        pub_data_melted['Publication Type'] = pub_data_melted['Publication Type'].map(pub_type_labels)
+        pub_data_melted['Publication Type'] = pd.Categorical(
+            pub_data_melted['Publication Type'].map(pub_type_labels),
+            categories=[pub_type_labels[pt] for pt in pub_types],
+            ordered=True
+        )
         fig1 = px.bar(pub_data_melted, x='Year', y='Count', color='Publication Type', barmode='group',
-                      title="Publication Type Distribution by Year", color_discrete_map=COLOR_MAP)
+                      title="Publication Type Distribution by Year", color_discrete_map=COLOR_MAP,
+                      category_orders={'Publication Type': [pub_type_labels[pt] for pt in pub_types]})
         fig1.update_layout(height=600, width=900)
         st.plotly_chart(fig1, use_container_width=True, key="year_wise_pub_type")
 
-        # Side-by-Side Comparison for 2023 vs 2024
         st.header("Publication Type Comparison (2023 vs 2024)", anchor="pub-type-comparison")
         st.markdown("Comparison of publication types between 2023 and 2024.")
         pub_compare = filtered_df.groupby(['Year'])[pub_types].sum().reset_index()
         pub_compare_melted = pub_compare.melt(id_vars='Year', value_vars=pub_types, var_name='Publication Type', value_name='Count')
-        pub_compare_melted['Publication Type'] = pub_compare_melted['Publication Type'].map(pub_type_labels)
+        pub_compare_melted['Publication Type'] = pd.Categorical(
+            pub_compare_melted['Publication Type'].map(pub_type_labels),
+            categories=[pub_type_labels[pt] for pt in pub_types],
+            ordered=True
+        )
         fig1b = px.bar(pub_compare_melted, x='Publication Type', y='Count', color='Year', barmode='group',
                        title="Publication Type Comparison (2023 vs 2024)",
-                       color_discrete_map=YEAR_COLOR_MAP)
+                       color_discrete_map=YEAR_COLOR_MAP,
+                       category_orders={'Publication Type': [pub_type_labels[pt] for pt in pub_types]})
         fig1b.update_layout(xaxis_tickangle=45, height=600, width=900)
         st.plotly_chart(fig1b, use_container_width=True, key="year_comparison_bar")
 
-        # Faculty/Department-wise Publication Quartile Distribution (Pie Chart)
         st.header("Faculty/Department Quartile Distribution", anchor="faculty-quartile")
         st.markdown("Distribution of Q1-Q4 quartile articles across faculties and departments.")
         with st.expander("View Faculty/Department Quartile Distributions"):
-            quartile_cols = ['Q1 Articles', 'Q2 Articles', 'Q3 Articles', 'Q4 Articles']
             tab1, tab2 = st.tabs(["Faculties", "Departments"])
             with tab1:
                 pub_quartile_data_faculty = filtered_df.groupby(['Faculty', 'Year'])[quartile_cols].sum().reset_index()
                 pub_quartile_data_faculty['Faculty'] = pub_quartile_data_faculty['Faculty'].map(lambda x: list(FACULTY_MAPPING.keys())[list(FACULTY_MAPPING.values()).index(x)] if x in FACULTY_MAPPING.values() else x)
                 pub_quartile_melted_faculty = pub_quartile_data_faculty.melt(id_vars=['Faculty', 'Year'], value_vars=quartile_cols, var_name='Quartile', value_name='Count')
-                pub_quartile_melted_faculty['Quartile'] = pub_quartile_melted_faculty['Quartile'].map({
-                    'Q1 Articles': 'Q1 Articles',
-                    'Q2 Articles': 'Q2 Articles',
-                    'Q3 Articles': 'Q3 Articles',
-                    'Q4 Articles': 'Q4 Articles'
-                })
+                pub_quartile_melted_faculty['Quartile'] = pd.Categorical(
+                    pub_quartile_melted_faculty['Quartile'],
+                    categories=quartile_cols,
+                    ordered=True
+                )
                 for year in ['2023', '2024']:
                     for faculty in pub_quartile_data_faculty['Faculty'].unique():
                         faculty_data = pub_quartile_melted_faculty[(pub_quartile_melted_faculty['Faculty'] == faculty) & (pub_quartile_melted_faculty['Year'] == year)]
                         if faculty_data['Count'].sum() > 0:
-                            fig = px.pie(faculty_data, names='Quartile', values='Count', title=f"{year} - {faculty} Quartile Distribution", color_discrete_map=COLOR_MAP)
+                            fig = px.pie(faculty_data, names='Quartile', values='Count', title=f"{year} - {faculty} Quartile Distribution",
+                                         color_discrete_map=COLOR_MAP,
+                                         category_orders={'Quartile': quartile_cols})
                             fig.update_layout(height=500, width=800)
                             st.plotly_chart(fig, use_container_width=True, key=f"pie_faculty_{faculty}_{year}")
             with tab2:
                 pub_quartile_data_dept = filtered_df.groupby(['Department', 'Year'])[quartile_cols].sum().reset_index()
-                pub_quartile_data_dept['Department'] = pub_quartile_data_dept['Department'].map(lambda x: list(DEPARTMENT_MAPPING.keys())[list(DEPARTMENT_MAPPING.values()).index(x)] if x in DEPARTMENT_MAPPING.values() else x)
+                pub_quartile_data_dept['Department'] = pub_quartile_data_dept['Department'].map(lambda x: list(DEPARTMENT_MAPPING.keys())[list(FACULTY_MAPPING.values()).index(x)] if x in DEPARTMENT_MAPPING.values() else x)
                 pub_quartile_melted_dept = pub_quartile_data_dept.melt(id_vars=['Department', 'Year'], value_vars=quartile_cols, var_name='Quartile', value_name='Count')
-                pub_quartile_melted_dept['Quartile'] = pub_quartile_melted_dept['Quartile'].map({
-                    'Q1 Articles': 'Q1 Articles',
-                    'Q2 Articles': 'Q2 Articles',
-                    'Q3 Articles': 'Q3 Articles',
-                    'Q4 Articles': 'Q4 Articles'
-                })
+                pub_quartile_melted_dept['Quartile'] = pd.Categorical(
+                    pub_quartile_melted_dept['Quartile'],
+                    categories=quartile_cols,
+                    ordered=True
+                )
                 for year in ['2023', '2024']:
                     for dept in pub_quartile_data_dept['Department'].unique():
                         dept_data = pub_quartile_melted_dept[(pub_quartile_melted_dept['Department'] == dept) & (pub_quartile_melted_dept['Year'] == year)]
                         if dept_data['Count'].sum() > 0:
-                            fig = px.pie(dept_data, names='Quartile', values='Count', title=f"{year} - {dept} Quartile Distribution", color_discrete_map=COLOR_MAP)
+                            fig = px.pie(dept_data, names='Quartile', values='Count', title=f"{year} - {dept} Quartile Distribution",
+                                         color_discrete_map=COLOR_MAP,
+                                         category_orders={'Quartile': quartile_cols})
                             fig.update_layout(height=500, width=800)
                             st.plotly_chart(fig, use_container_width=True, key=f"pie_dept_{dept}_{year}")
 
-        # Faculty and Publication Type Heatmap
         st.header("Faculty and Publication Type Distribution", anchor="faculty-pub-type")
         st.markdown("Heatmap of publication types across faculties.")
         tab1, tab2 = st.tabs(["Faculties", "Departments"])
@@ -670,6 +674,7 @@ with st.container():
                 heatmap_year = heatmap_data_faculty[heatmap_data_faculty['Year'] == year].set_index('Faculty')[pub_types]
                 heatmap_year = heatmap_year.loc[heatmap_year.sum(axis=1) > 0, :]
                 heatmap_year = heatmap_year.reindex(index=[FACULTY_MAPPING[f] for f in FACULTY_ORDER if FACULTY_MAPPING[f] in heatmap_year.index])
+                heatmap_year = heatmap_year[pub_types]  # Ensure column order
                 heatmap_year.columns = [pub_type_labels[col] for col in heatmap_year.columns]
                 fig2 = px.imshow(heatmap_year, title=f"{year} - Faculty and Publication Type Distribution",
                                  labels=dict(x="Publication Type", y="Faculty", color="Count"), color_continuous_scale="Blues")
@@ -682,19 +687,19 @@ with st.container():
                 heatmap_year = heatmap_data_dept[heatmap_data_dept['Year'] == year].set_index('Department')[pub_types]
                 heatmap_year = heatmap_year.loc[heatmap_year.sum(axis=1) > 0, :]
                 heatmap_year = heatmap_year.reindex(index=[DEPARTMENT_MAPPING[d] for d in DEPARTMENT_ORDER if DEPARTMENT_MAPPING[d] in heatmap_year.index])
+                heatmap_year = heatmap_year[pub_types]  # Ensure column order
                 heatmap_year.columns = [pub_type_labels[col] for col in heatmap_year.columns]
                 fig2 = px.imshow(heatmap_year, title=f"{year} - Department and Publication Type Distribution",
                                  labels=dict(x="Publication Type", y="Department", color="Count"), color_continuous_scale="Blues")
                 fig2.update_layout(height=800, width=900, xaxis={'tickangle': 45})
                 st.plotly_chart(fig2, use_container_width=True, key=f"heatmap_dept_{year}")
 
-        # Top 5 Units by Total Publications
         st.header("Top 5 Units by Total Publications", anchor="top-5-units")
         st.markdown("Top 5 faculties and departments by publication count for 2023 and 2024.")
         tab1, tab2 = st.tabs(["Faculties", "Departments"])
         with tab1:
             faculty_year_totals = filtered_df.groupby(['Faculty', 'Year'])['Total Publications'].sum().reset_index()
-            faculty_year_totals['Faculty'] = faculty_year_totals['Faculty'].map(lambda x: list(FACULTY_MAPPING.keys())[list(FACULTY_MAPPING.values()).index(x)] if x in FACULTY_MAPPING.values() else x)
+            faculty_year_totals['Faculty'] = faculty_year_totals['Faculty'].map(lambda x: list(FACULTY_MAPPING.keys())[list(FACULTY_MAPPING.values()).index(x)] if x in FAC pleasuresY_MAPPING.values() else x)
             top_5_faculties = faculty_year_totals.groupby('Faculty')['Total Publications'].sum().nlargest(5).index
             top_faculty_data = faculty_year_totals[faculty_year_totals['Faculty'].isin(top_5_faculties)]
             fig3_faculty = px.bar(top_faculty_data, x='Faculty', y='Total Publications', color='Year', barmode='group',
@@ -704,7 +709,7 @@ with st.container():
             st.plotly_chart(fig3_faculty, use_container_width=True, key="top_5_faculties_bar")
         with tab2:
             dept_year_totals = filtered_df.groupby(['Department', 'Year'])['Total Publications'].sum().reset_index()
-            dept_year_totals['Department'] = dept_year_totals['Department'].map(lambda x: list(DEPARTMENT_MAPPING.keys())[list(DEPARTMENT_MAPPING.values()).index(x)] if x in FACULTY_MAPPING.values() else x)
+            dept_year_totals['Department'] = dept_year_totals['Department'].map(lambda x: list(DEPARTMENT_MAPPING.keys())[list(DEPARTMENT_MAPPING.values()).index(x)] if x in DEPARTMENT_MAPPING.values() else x)
             top_5_depts = dept_year_totals.groupby('Department')['Total Publications'].sum().nlargest(5).index
             top_dept_data = dept_year_totals[dept_year_totals['Department'].isin(top_5_depts)]
             fig3_dept = px.bar(top_dept_data, x='Department', y='Total Publications', color='Year', barmode='group',
@@ -713,11 +718,9 @@ with st.container():
             fig3_dept.update_layout(xaxis_tickangle=45, height=500, width=900)
             st.plotly_chart(fig3_dept, use_container_width=True, key="top_5_depts_bar")
         
-        # Title-wise Publication Distribution
         st.header("Title-based Publication Distribution", anchor="title-distribution")
         st.markdown("Publication contributions by academic titles for 2023 and 2024.")
         
-        # Apply title mapping to ensure consistency
         title_mapping = {
             "Prof.": "Prof.",
             "Assoc. Prof.": "Assoc. Prof.",
@@ -735,11 +738,9 @@ with st.container():
         title_order_updated = ["Asst. Prof.", "Assoc. Prof.", "Prof.", "Other Titles"]
         title_year_pubs['Title'] = pd.Categorical(title_year_pubs['Title'], categories=title_order_updated, ordered=True)
         
-        # Debug: Display raw publication counts
         st.write("**Publication Counts by Title**")
         st.dataframe(title_year_pubs.pivot(index='Title', columns='Year', values='Total Publications').fillna(0))
         
-        # Plot for all titles
         fig_titles = px.bar(title_year_pubs, x='Title', y='Total Publications', color='Year', barmode='group',
                             title="Publication Distribution by Title",
                             color_discrete_map=YEAR_COLOR_MAP)
@@ -753,7 +754,6 @@ with st.container():
         )
         st.plotly_chart(fig_titles, use_container_width=True, key="title_wise_pubs_bar")
         
-        # Publication Change (2023-2024)
         st.header("Publication Change (2023-2024)", anchor="pub-change")
         st.markdown("Change in publication counts across units from 2023 to 2024.")
         tab1, tab2 = st.tabs(["Faculties", "Departments"])
@@ -780,7 +780,6 @@ with st.container():
             fig6_dept.update_layout(xaxis_tickangle=45, height=500, width=900)
             st.plotly_chart(fig6_dept, use_container_width=True, key="pub_change_dept_bar")
 
-        # Top 5 Researchers by Total Publications
         st.header("Top 5 Researchers by Total Publications", anchor="top-5-researchers")
         st.markdown("Top 5 most active researchers.")
         top_researchers = filtered_df.groupby(['Name', 'Faculty', 'Department'])['Total Publications'].sum().reset_index()
@@ -797,7 +796,6 @@ with st.container():
         ])
         st.plotly_chart(fig7, use_container_width=True, key="top_5_researchers_table")
 
-        # Impact Score
         st.header("Impact Score", anchor="impact-score")
         st.markdown("Total impact score across units for 2023 and 2024.")
         tab1, tab2 = st.tabs(["Faculties", "Departments"])
@@ -819,7 +817,6 @@ with st.container():
             st.plotly_chart(fig8_dept, use_container_width=True, key="impact_score_dept_bar")
         st.markdown("**Calculation:** The impact score is a weighted sum based on publication types: Q1 articles (4 points), Q2 (3 points), Q3 (2 points), Q4 (1 point), and ESCI, Scopus, and non-quartile articles (0.5 points each). Formula: **Impact Score = (Q1 × 4) + (Q2 × 3) + (Q3 × 2) + (Q4 × 1) + [(ESCI + Scopus + Non-Quartile) × 0.5]**. Example: A faculty with 5 Q1 (5×4=20), 3 Q2 (3×3=9), and 2 ESCI (2×0.5=1) articles has a total impact score of 20+9+1=30.")
 
-        # Publication and Impact Score (Scatter Plot)
         st.header("Publications and Impact Score", anchor="pubs-impact")
         st.markdown("Relationship between total publications and impact score across units.")
         tab1, tab2 = st.tabs(["Faculties", "Departments"])
@@ -839,7 +836,6 @@ with st.container():
             st.plotly_chart(fig8b_dept, use_container_width=True, key="scatter_dept_plot")
         st.markdown("**Calculation:** This visualization compares total publications (sum of all publication types) and impact scores (calculated as above). Each point represents a faculty or department, with point size indicating total publications and symbols indicating the year (2023 or 2024).")
 
-        # Active Researcher Ratio
         st.header("Active Researcher Ratio", anchor="active-ratio")
         st.markdown("Proportion of active researchers across units.")
         tab1, tab2 = st.tabs(["Faculties", "Departments"])
@@ -868,7 +864,6 @@ with st.container():
             fig9_dept.update_layout(xaxis_tickangle=45, height=500, width=900)
             st.plotly_chart(fig9_dept, use_container_width=True, key="active_ratio_dept_bar")
 
-        # Publications by Year
         st.header("Publications by Year", anchor="yearly-pubs")
         st.markdown("Publication counts across units for 2023 and 2024.")
         tab1, tab2 = st.tabs(["Faculties", "Departments"])
@@ -889,7 +884,6 @@ with st.container():
             fig10_dept.update_layout(xaxis_tickangle=45, height=500, width=900)
             st.plotly_chart(fig10_dept, use_container_width=True, key="pubs_by_year_dept_bar")
 
-        # Quartile Diversity Index
         st.header("Quartile Diversity Index", anchor="diversity-index")
         st.markdown("Diversity of Q1-Q4 articles across units.")
         tab1, tab2 = st.tabs(["Faculties", "Departments"])
@@ -920,7 +914,6 @@ with st.container():
             st.plotly_chart(fig11_dept, use_container_width=True, key="diversity_index_dept_bar")
         st.markdown("**Calculation:** The Quartile Diversity Index is calculated using the Shannon Entropy formula, considering the proportions of Q1, Q2, Q3, and Q4 articles. Formula: **H = -Σ(p_i * ln(p_i))**; where p_i is the proportion of each quartile type. Example: A faculty with 10 Q1, 5 Q2, 5 Q3, and 0 Q4 articles (total 20) has proportions Q1=0.5, Q2=0.25, Q3=0.25. H = -[(0.5 * ln(0.5)) + (0.25 * ln(0.25)) + (0.25 * ln(0.25))] ≈ 1.04. Higher indices indicate a more balanced quartile distribution.")
 
-        # Top Publication Types
         st.header("Most Common Publication Types", anchor="common-pub-types")
         st.markdown("Most common publication types across units.")
         tab1, tab2 = st.tabs(["Faculties", "Departments"])
@@ -928,20 +921,25 @@ with st.container():
             pub_type_sums_faculty = filtered_df.groupby(['Faculty', 'Year'])[pub_types].sum().reset_index()
             pub_type_sums_faculty['Faculty'] = pub_type_sums_faculty['Faculty'].map(lambda x: list(FACULTY_MAPPING.keys())[list(FACULTY_MAPPING.values()).index(x)] if x in FACULTY_MAPPING.values() else x)
             pub_type_melted_faculty = pub_type_sums_faculty.melt(id_vars=['Faculty', 'Year'], value_vars=pub_types, var_name='Publication Type', value_name='Count')
-            pub_type_melted_faculty['Publication Type'] = pub_type_melted_faculty['Publication Type'].map(pub_type_labels)
-            top_pub_types_faculty = pub_type_melted_faculty.groupby('Publication Type')['Count'].sum().nlargest(5).index
+            pub_type_melted_faculty['Publication Type'] = pd.Categorical(
+                pub_type_melted_faculty['Publication Type'].map(pub_type_labels),
+                categories=[pub_type_labels[pt] for pt in pub_types],
+                ordered=True
+            )
             
             # 2023 Chart
-            faculty_2023 = pub_type_melted_faculty[(pub_type_melted_faculty['Publication Type'].isin(top_pub_types_faculty)) & (pub_type_melted_faculty['Year'] == '2023')]
+            faculty_2023 = pub_type_melted_faculty[pub_type_melted_faculty['Year'] == '2023']
             fig12_faculty_2023 = px.bar(faculty_2023, x='Faculty', y='Count', color='Publication Type', barmode='stack',
-                                        title="Most Common Publication Types by Faculty (2023)", color_discrete_map=COLOR_MAP)
+                                        title="Most Common Publication Types by Faculty (2023)", color_discrete_map=COLOR_MAP,
+                                        category_orders={'Publication Type': [pub_type_labels[pt] for pt in pub_types]})
             fig12_faculty_2023.update_layout(xaxis_tickangle=45, height=600, width=900)
             st.plotly_chart(fig12_faculty_2023, use_container_width=True, key="faculty_top_pub_types_2023")
             
             # 2024 Chart
-            faculty_2024 = pub_type_melted_faculty[(pub_type_melted_faculty['Publication Type'].isin(top_pub_types_faculty)) & (pub_type_melted_faculty['Year'] == '2024')]
+            faculty_2024 = pub_type_melted_faculty[pub_type_melted_faculty['Year'] == '2024']
             fig12_faculty_2024 = px.bar(faculty_2024, x='Faculty', y='Count', color='Publication Type', barmode='stack',
-                                        title="Most Common Publication Types by Faculty (2024)", color_discrete_map=COLOR_MAP)
+                                        title="Most Common Publication Types by Faculty (2024)", color_discrete_map=COLOR_MAP,
+                                        category_orders={'Publication Type': [pub_type_labels[pt] for pt in pub_types]})
             fig12_faculty_2024.update_layout(xaxis_tickangle=45, height=600, width=900)
             st.plotly_chart(fig12_faculty_2024, use_container_width=True, key="faculty_top_pub_types_2024")
             
@@ -949,24 +947,28 @@ with st.container():
             pub_type_sums_dept = filtered_df.groupby(['Department', 'Year'])[pub_types].sum().reset_index()
             pub_type_sums_dept['Department'] = pub_type_sums_dept['Department'].map(lambda x: list(DEPARTMENT_MAPPING.keys())[list(DEPARTMENT_MAPPING.values()).index(x)] if x in DEPARTMENT_MAPPING.values() else x)
             pub_type_melted_dept = pub_type_sums_dept.melt(id_vars=['Department', 'Year'], value_vars=pub_types, var_name='Publication Type', value_name='Count')
-            pub_type_melted_dept['Publication Type'] = pub_type_melted_dept['Publication Type'].map(pub_type_labels)
-            top_pub_types_dept = pub_type_melted_dept.groupby('Publication Type')['Count'].sum().nlargest(5).index
+            pub_type_melted_dept['Publication Type'] = pd.Categorical(
+                pub_type_melted_dept['Publication Type'].map(pub_type_labels),
+                categories=[pub_type_labels[pt] for pt in pub_types],
+                ordered=True
+            )
             
             # 2023 Chart
-            dept_2023 = pub_type_melted_dept[(pub_type_melted_dept['Publication Type'].isin(top_pub_types_dept)) & (pub_type_melted_dept['Year'] == '2023')]
+            dept_2023 = pub_type_melted_dept[pub_type_melted_dept['Year'] == '2023']
             fig12_dept_2023 = px.bar(dept_2023, x='Department', y='Count', color='Publication Type', barmode='stack',
-                                     title="Most Common Publication Types by Department (2023)", color_discrete_map=COLOR_MAP)
+                                     title="Most Common Publication Types by Department (2023)", color_discrete_map=COLOR_MAP,
+                                     category_orders={'Publication Type': [pub_type_labels[pt] for pt in pub_types]})
             fig12_dept_2023.update_layout(xaxis_tickangle=45, height=600, width=900)
             st.plotly_chart(fig12_dept_2023, use_container_width=True, key="dept_top_pub_types_2023")
             
             # 2024 Chart
-            dept_2024 = pub_type_melted_dept[(pub_type_melted_dept['Publication Type'].isin(top_pub_types_dept)) & (pub_type_melted_dept['Year'] == '2024')]
+            dept_2024 = pub_type_melted_dept[pub_type_melted_dept['Year'] == '2024']
             fig12_dept_2024 = px.bar(dept_2024, x='Department', y='Count', color='Publication Type', barmode='stack',
-                                     title="Most Common Publication Types by Department (2024)", color_discrete_map=COLOR_MAP)
+                                     title="Most Common Publication Types by Department (2024)", color_discrete_map=COLOR_MAP,
+                                     category_orders={'Publication Type': [pub_type_labels[pt] for pt in pub_types]})
             fig12_dept_2024.update_layout(xaxis_tickangle=45, height=600, width=900)
             st.plotly_chart(fig12_dept_2024, use_container_width=True, key="dept_top_pub_types_2024")
 
-# Application footer
 st.markdown("---")
 st.markdown("Kerem Delialioğlu")
 st.markdown("Middle East Technical University — Office of Research Coordination")
