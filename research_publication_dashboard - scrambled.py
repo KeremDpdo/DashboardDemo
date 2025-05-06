@@ -395,6 +395,8 @@ def load_and_process_data(seed):
     except Exception as e:
         logger.error(f"Error in load_and_process_data: {str(e)}")
         return None, None, str(e)
+    else:
+         st.success("Randomized data generated successfully and faculty/department names standardized.")
 
 # Color mapping
 COLOR_MAP = {
