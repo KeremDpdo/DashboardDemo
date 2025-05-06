@@ -445,8 +445,6 @@ with st.container():
     
     if error:
         st.error(f"Error processing data: {error}")
-    else:
-        st.success("Randomized data generated successfully and faculty/department names standardized.")
         
         # Summary Statistics
         st.header("Summary Statistics", anchor="summary-statistics")
